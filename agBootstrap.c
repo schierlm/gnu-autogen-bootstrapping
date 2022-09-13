@@ -238,30 +238,29 @@ static char * doDir_directive_disp(char const * str, char * scan_next)
     return disp(id, str + directive_keywd_len[id], scan_next);
 }
 
-const int
-    FTYP_SELECT_COMPARE_FULL          = 0x8000,  /* *==* */
-    FTYP_SELECT_COMPARE_SKP_START     = 0x8001,  /* *==  */
-    FTYP_SELECT_COMPARE_SKP_END       = 0x8002,  /*  ==* */
-    FTYP_SELECT_COMPARE               = 0x8003,  /*  ==  */
+    #define FTYP_SELECT_COMPARE_FULL           0x8000  /* *==* */
+    #define FTYP_SELECT_COMPARE_SKP_START      0x8001  /* *==  */
+    #define FTYP_SELECT_COMPARE_SKP_END        0x8002  /*  ==* */
+    #define FTYP_SELECT_COMPARE                0x8003  /*  ==  */
 
-    FTYP_SELECT_EQUIVALENT_FULL       = 0x8004,  /* *=*  */
-    FTYP_SELECT_EQUIVALENT_SKP_START  = 0x8005,  /* *=   */
-    FTYP_SELECT_EQUIVALENT_SKP_END    = 0x8006,  /*  =*  */
-    FTYP_SELECT_EQUIVALENT            = 0x8007,  /*  =   */
+    #define FTYP_SELECT_EQUIVALENT_FULL        0x8004  /* *=*  */
+    #define FTYP_SELECT_EQUIVALENT_SKP_START   0x8005  /* *=   */
+    #define FTYP_SELECT_EQUIVALENT_SKP_END     0x8006  /*  =*  */
+    #define FTYP_SELECT_EQUIVALENT             0x8007  /*  =   */
 
-    FTYP_SELECT_MATCH_FULL            = 0x8008,  /* *~~* */
-    FTYP_SELECT_MATCH_SKP_START       = 0x8009,  /* *~~  */
-    FTYP_SELECT_MATCH_SKP_END         = 0x800A,  /*  ~~* */
-    FTYP_SELECT_MATCH                 = 0x800B,  /*  ~~  */
+    #define FTYP_SELECT_MATCH_FULL             0x8008  /* *~~* */
+    #define FTYP_SELECT_MATCH_SKP_START        0x8009  /* *~~  */
+    #define FTYP_SELECT_MATCH_SKP_END          0x800A  /*  ~~* */
+    #define FTYP_SELECT_MATCH                  0x800B  /*  ~~  */
 
-    FTYP_SELECT_EQV_MATCH_FULL        = 0x800C,  /* *~*  */
-    FTYP_SELECT_EQV_MATCH_SKP_START   = 0x800D,  /* *~   */
-    FTYP_SELECT_EQV_MATCH_SKP_END     = 0x800E,  /*  ~*  */
-    FTYP_SELECT_EQV_MATCH             = 0x800F,  /*  ~   */
+    #define FTYP_SELECT_EQV_MATCH_FULL         0x800C  /* *~*  */
+    #define FTYP_SELECT_EQV_MATCH_SKP_START    0x800D  /* *~   */
+    #define FTYP_SELECT_EQV_MATCH_SKP_END      0x800E  /*  ~*  */
+    #define FTYP_SELECT_EQV_MATCH              0x800F  /*  ~   */
 
-    FTYP_SELECT_MATCH_ANYTHING        = 0x801C,  /*  *   */
-    FTYP_SELECT_MATCH_EXISTENCE       = 0x801D,  /* +E   */
-    FTYP_SELECT_MATCH_NONEXISTENCE    = 0x801E;   /* !E   */
+    #define FTYP_SELECT_MATCH_ANYTHING         0x801C  /*  *   */
+    #define FTYP_SELECT_MATCH_EXISTENCE        0x801D  /* +E   */
+    #define FTYP_SELECT_MATCH_NONEXISTENCE     0x801E  /* !E   */
 
 #include "agCharMap.c"
 
