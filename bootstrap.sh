@@ -56,7 +56,7 @@ git clean -fdx
 git restore --staged --worktree :/
 patch -p1 -i ../../getdefs.patch
 cd getdefs
-gcc getdefs.c -I ../../.. -o $PREFIX/bin/getdefs
+gcc -std=gnu99 getdefs.c -I ../../.. -o $PREFIX/bin/getdefs
 cd ..
 
 echo "=== Bootstrapping autogen ==="
@@ -73,7 +73,7 @@ $PREFIX/bin/getdefs load=expr.cfg
 sed -n '/^doDir_invalid/d;/^doDir_[a-z]*(/{;s@(.*@@;s@^doDir_@@;p;}' defDirect.c | sort >directive_in.def
 perl ../../../build-indirect-templates.pl
 gcc ../../../getGuileVersion.c $(pkg-config guile-3.0 --cflags) -o getGuileVersion
-gcc -DGUILE_VERSION=$(./getGuileVersion) -DLIBDATADIR=\"$PREFIX/lib/autogen\" ../../../agBootstrap.c -I . -I .. -I ../../.. $(pkg-config guile-3.0 --cflags) -o $PREFIX/bin/autogen $(pkg-config guile-3.0 --libs)
+gcc -std=gnu99 -DGUILE_VERSION=$(./getGuileVersion) -DLIBDATADIR=\"$PREFIX/lib/autogen\" ../../../agBootstrap.c -I . -I .. -I ../../.. $(pkg-config guile-3.0 --cflags) -o $PREFIX/bin/autogen $(pkg-config guile-3.0 --libs)
 cd ..
 
 echo "=== Bootstrapping tpl-config.tlib ==="
