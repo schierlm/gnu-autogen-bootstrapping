@@ -1,0 +1,543 @@
+--- a/getdefs/gdemit.c
++++ b/getdefs/gdemit.c
+@@ -25,6 +25,10 @@
+  *  with this program.  If not, see <http://www.gnu.org/licenses/>.
+  */
+ 
++static char * emit_subblock(char const * pzDefList, char * pzText, char * pzOut);
++static char * list_attrib(char * pzText, char * pzOut);
++static char * subblock_str(char ** ppzText, uint_t sepChar, char * pzOut);
++
+ /*
+  *  compress_def
+  *
+@@ -195,25 +199,15 @@ emitDefinition(char * pzDef, char * pzOut)
+      */
+     compress_def(++pzDef);
+ 
+-    if (HAVE_OPT( SUBBLOCK )) {
+-        int    ct  = STACKCT_OPT(  SUBBLOCK );
+-        char const **  ppz = STACKLST_OPT( SUBBLOCK );
+-
+-        do  {
+-            char const * pz = *ppz++;
++    if (opt_subblock != NULL) {
++            char const * pz = opt_subblock;
+             if (strcmp(pz, zEntryName) == 0)
+                 return emit_subblock(pz, pzDef, pzOut);
+-        } while (--ct > 0);
+     }
+ 
+-    if (HAVE_OPT( LISTATTR )) {
+-        int    ct  = STACKCT_OPT(  LISTATTR );
+-        char const ** ppz = STACKLST_OPT( LISTATTR );
+-
+-        do  {
+-            if (strcmp(*ppz++, zEntryName) == 0)
++    if (opt_listattr != NULL) {
++            if (strcmp(opt_listattr, zEntryName) == 0)
+                 return list_attrib(pzDef, pzOut);
+-        } while (--ct > 0);
+     }
+ 
+     if (isspace(*pzDef))
+--- a/getdefs/gdinit.c
++++ b/getdefs/gdinit.c
+@@ -119,7 +119,7 @@ fixupSubblockString(char const * pzSrc)
+             fprintf(stderr, "ERROR:  attribute names must start "
+                     "with an alphabetic character:\n\t%s\n",
+                     pzString);
+-            USAGE(EXIT_FAILURE);
++            die(EXIT_FAILURE, "USAGE");
+         }
+ 
+         /*
+@@ -151,6 +151,7 @@ fixupSubblockString(char const * pzSrc)
+ }
+ 
+ 
++#if 0
+ /*
+  *  loadStdin
+  *
+@@ -173,7 +174,7 @@ loadStdin(void)
+     if (isatty(STDIN_FILENO)) {
+         fputs("getdefs error:  no inputs were specified and stdin is a tty\n",
+               stderr);
+-        USAGE(EXIT_FAILURE);
++        die(EXIT_FAILURE, "USAGE");
+     }
+ 
+     while (fgets(z, (int)sizeof(z), stdin) != NULL) {
+@@ -200,6 +201,7 @@ loadStdin(void)
+     }
+ }
+ 
++#endif
+ 
+ /*
+  *  processEmbeddedOptions
+@@ -228,7 +230,16 @@ processEmbeddedOptions(char * pzText)
+         pzEnd = strstr(pzStart, zEndSt);
+         if (pzEnd == NULL)
+             return;
++
++        if (opt_subblock == NULL && strncmp(pzStart, "/*=--subblock=", 14) == 0) {
++          pzEnd[0] = '\0';
++          opt_subblock = fixupSubblockString(pzStart+14);
++          pzEnd[0] = '=';
++        } else {
+ 
++        pzEnd[0] = '\0';
++        die(1, "MORE EMBEDDED OPTIONS FOUND:%s\n", pzStart);
++#if 0
+         pzStart = compressOptionText(pzStart + sizeof(zStStr)-1, pzEnd);
+ 
+         optionLoadLine(&getdefsOptions, pzStart);
+@@ -237,6 +248,8 @@ processEmbeddedOptions(char * pzText)
+             char const ** ppz = STACKLST_OPT(SUBBLOCK);
+             ppz[ sblct ] = fixupSubblockString(ppz[sblct]);
+         }
++#endif
++        }
+         pzText = pzEnd + sizeof(zEndSt);
+     }
+ }
+@@ -259,14 +272,14 @@ set_define_re(void)
+      *  Our default pattern is to accept all names following
+      *  the '/' '*' '=' character sequence.  We ignore case.
+      */
+-    if ((! HAVE_OPT(DEFS_TO_GET)) || (*OPT_ARG(DEFS_TO_GET) == NUL)) {
++    if ((opt_defs_to_get == NULL) || (*opt_defs_to_get == NUL)) {
+         def_pat = default_pat;
+ 
+-    } else if (strncmp(OPT_ARG(DEFS_TO_GET), default_pat, 4) == 0) {
+-        def_pat = OPT_ARG(DEFS_TO_GET);
++    } else if (strncmp(opt_defs_to_get, default_pat, 4) == 0) {
++        def_pat = opt_defs_to_get;
+ 
+     } else {
+-        char const * pz  = OPT_ARG(DEFS_TO_GET);
++        char const * pz  = opt_defs_to_get;
+         size_t       len = strlen((char *)pz) + 16;
+         char *       bf  = malloc(len);
+ 
+@@ -308,6 +321,7 @@ set_define_re(void)
+     }
+ }
+ 
++#if 0
+ /**
+  *  Make sure each of the input files is findable.
+  *  Also, while we are at it, compute the output file mod time
+@@ -345,6 +359,7 @@ set_modtime(void)
+     if (ct > 0)
+         fserr(GETDEFS_EXIT_INVALID_INPUT, "stat", ppz[-1]);
+ }
++#endif
+ 
+ /**
+  *  validate_opts
+@@ -364,6 +379,7 @@ validate_opts(void)
+ {
+     set_define_re();
+ 
++#if 0
+     /*
+      *  Prepare each sub-block entry so we can parse easily later.
+      */
+@@ -426,6 +442,7 @@ validate_opts(void)
+         if ((pz == NULL) || (*pz == NUL))
+             OPT_ARG(LINENUM) = "linenum";
+     }
++#endif
+ 
+     {
+         static char const ag_nm_chars[] =
+--- a/getdefs/getdefs.c
++++ b/getdefs/getdefs.c
+@@ -1,3 +1,109 @@
++#define _GNU_SOURCE
++#include <time.h>
++#include <stdlib.h>
++#include <string.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <stdarg.h>
++#include <unistd.h>
++#include <getopt.h>
++#include <ctype.h>
++#include <errno.h>
++#include <stdbool.h>
++#include <stdint.h>
++#include <regex.h>
++#include <sys/stat.h>
++
++#define MOD_LOCAL static
++#define GETDEFS_EXIT_FAILURE 1
++#define GETDEFS_EXIT_USAGE_ERROR 1
++#define GETDEFS_EXIT_INVALID_INPUT 1
++
++bool HAVE_OPT_LINENUM = false, HAVE_OPT_SRCFILE = false;
++const char* opt_template = NULL;
++const char* opt_output = NULL;
++const char* opt_subblock = NULL;
++const char* opt_defs_to_get = NULL;
++const char* opt_listattr = NULL;
++const char** opts_assign = NULL;
++const char * hardcoded_opts_assign[] = {"two-phase   = yes", "group       = ag", "addtogroup  = \"autogen\""};
++int optcount_assign = 0;
++char * const * opt_input = NULL;
++int optcount_input = 0;
++
++#include <sys/param.h>
++#define MAXPATHLEN     PATH_MAX
++#define STACKCT_OPT(foo) 0
++#define STACKLST_OPT(foo) NULL
++#define HAVE_OPT(foo) 0
++#define OPT_ARG(foo) NULL
++#define VOIDP(_a)  ((void *)(uintptr_t)(_a))
++#define OPT_VALUE_FIRST_INDEX 0
++#define SUCCESS  ((tSuccess) 0)
++#define FAILURE  ((tSuccess)-1)
++#define PROBLEM  ((tSuccess) 1)
++typedef int tSuccess;
++#define FAILED(p)       ((p) <  SUCCESS)
++#define HADGLITCH(p)    ((p) >  SUCCESS)
++
++
++#undef   PKGDATADIR
++#define  PKGDATADIR ""
++#define  DEFINING 1
++#define  HAVE_STRSIGNAL
++#define  HAVE_CHMOD
++#define FOPEN_BINARY_FLAG "b"
++#define uint_t unsigned int
++
++#ifndef NUL
++#define NUL '\0'
++#endif
++#define NL '\n'
++
++
++void vdie(int exit_code, char const * fmt, va_list ap)
++{
++    fputs("fatal error:\n", stderr);
++    vfprintf(stderr, fmt, ap);
++    fflush(stderr);
++    exit(exit_code);
++}
++
++void die(int exit_code, char const * fmt, ...)
++{
++    va_list ap;
++    va_start(ap, fmt);
++    vdie(exit_code, fmt, ap);
++}
++
++void nomem_err(size_t len, char const * what)
++{
++  die(1, "Out of memory: %d bytes of %s\n", len, what);
++}
++
++void fserr(int exit_code, char const * op, char const * fname)
++{
++    die(exit_code, "Fserr %s on %s\n", op, fname);
++}
++
++
++static void set_first_idx(void);
++static FILE * startAutogen(void);
++static void update_db(void);
++static char * loadFile(char const * pzFname);
++static void processFile(char const * fname);
++static void doPreamble(FILE * outFp);
++static void printEntries(FILE * fp);
++static int awaitAutogen(void);
++static tSuccess buildPreamble(char ** ppzDef, char ** ppzOut, char const * fname, int line);
++MOD_LOCAL void processEmbeddedOptions(char * pzText);
++
++#include "getdefs.h"
++#include "agCharMap.c"
++#include "../autoopts/streqvcmp.c"
++#include "gdemit.c"
++#include "gdinit.c"
++
+ 
+ /**
+  *  @file getdefs.c
+@@ -51,8 +157,48 @@ int
+ main(int argc, char ** argv)
+ {
+     FILE * outFp;
++    int firstFilename;
++    char * const * files = argv;
++    char * const fixedfiles[] = {"funcCase.c", "funcDef.c", "funcEval.c", "funcFor.c", "funcIf.c", "functions.c", "expExtract.c", "expFormat.c",
++      "expGperf.c", "expGuile.c", "expMake.c", "expOutput.c", "expPrint.c", "expState.c", "expString.c", "agShell.c"};
++
++    for(int i=1; i<argc; i++) {
++      if (strcmp(argv[i], "linenum") == 0) {
++        HAVE_OPT_LINENUM = true;
++      } else if (strcmp(argv[i], "srcfile") == 0) {
++        HAVE_OPT_SRCFILE = true;
++      } else if (strncmp(argv[i], "template=", 9) == 0) {
++        opt_template = argv[i]+9;
++      } else if (strncmp(argv[i], "templ=", 6) == 0) {
++        opt_template = argv[i]+6;
++      } else if (strncmp(argv[i], "output=", 7) == 0) {
++        opt_output = argv[i]+7;
++      } else if (strncmp(argv[i], "defs=", 5) == 0) {
++        opt_defs_to_get = argv[i] + 5;
++      } else if (strncmp(argv[i], "listattr=", 9) == 0) {
++        opt_listattr = argv[i] + 9;
++      } else if (strcmp(argv[i], "load=expr.cfg") == 0) {
++        // set hardcoded configuration from expr.cfg
++        opt_defs_to_get = "gfunc";
++        opt_template = "snarf.tpl";
++        HAVE_OPT_SRCFILE = true;
++        opt_output = "expr.def";
++        opt_subblock = fixupSubblockString("exparg = arg_name,arg_desc,arg_optional,arg_list");
++        opts_assign = hardcoded_opts_assign;
++        optcount_assign = 3;
++        files = fixedfiles;
++        firstFilename = 0;
++        argc = 16;
++        break;
++      } else {
++        firstFilename = i;
++        break;
++      }
++    }
++
++    opt_input = files + firstFilename;
++    optcount_input = argc - firstFilename;
+ 
+-    optionProcess(&getdefsOptions, argc, argv);
+     validate_opts();
+ 
+     outFp = startAutogen();
+@@ -63,12 +209,9 @@ main(int argc, char ** argv)
+      *  Process each input file
+      */
+     {
+-        int    ct  = STACKCT_OPT(INPUT);
+-        char const ** ppz = STACKLST_OPT(INPUT);
+-
+-        do  {
+-            processFile(*ppz++);
+-        } while (--ct > 0);
++        for(int i = 0; i<optcount_input; i++) {
++            processFile(opt_input[i]);
++        }
+     }
+ 
+     /*
+@@ -79,8 +222,7 @@ main(int argc, char ** argv)
+         qsort(VOIDP(papzBlocks), blkUseCt, sizeof(char *), compar_defname);
+         set_first_idx();
+     }
+-
+-    else if (ENABLED_OPT(ORDERING) && (blkUseCt > 1))
++    else if ((blkUseCt > 1))
+         qsort(VOIDP(papzBlocks), blkUseCt, sizeof(char *), &compar_text);
+ 
+     printEntries(outFp);
+@@ -93,14 +235,14 @@ main(int argc, char ** argv)
+      *  IF output is to a file
+      *  THEN set the permissions and modification times
+      */
+-    if (  (WHICH_IDX_AUTOGEN == INDEX_OPT_OUTPUT)
++    if ( opt_output != NULL
+        && (outFp != stdout) )  {
+         struct utimbuf tbuf;
+         tbuf.actime  = time((time_t *)NULL);
+         tbuf.modtime = modtime + 1;
+-        utime(OPT_ARG(OUTPUT), &tbuf);
++        utime(opt_output, &tbuf);
+ #ifndef HAVE_CHMOD
+-        chmod(OPT_ARG(OUTPUT), S_IRUSR|S_IRGRP|S_IROTH);
++        chmod(opt_output, S_IRUSR|S_IRGRP|S_IROTH);
+ #endif
+     }
+ 
+@@ -118,7 +260,7 @@ main(int argc, char ** argv)
+     return EXIT_SUCCESS;
+ }
+ 
+-
++#if 0
+ /*
+  *  assignIndex
+  */
+@@ -221,6 +363,7 @@ assignIndex(char * pzOut, char * pzDef)
+ 
+     return pzOut;
+ }
++#endif
+ 
+ 
+ /*
+@@ -349,11 +492,11 @@ buildDefinition(char * pzDef, char const * pzFile, int line, char * pzOut)
+         } while (--ct > 0);
+     }
+ 
+-    if (HAVE_OPT(SRCFILE))
+-        pzOut += sprintf(pzOut, zSrcFile, OPT_ARG(SRCFILE), pzFile);
++    if (HAVE_OPT_SRCFILE)
++        pzOut += sprintf(pzOut, zSrcFile, "srcfile", pzFile);
+ 
+-    if (HAVE_OPT(LINENUM))
+-        pzOut += sprintf(pzOut, zLineNum, OPT_ARG(LINENUM), line);
++    if (HAVE_OPT_LINENUM)
++        pzOut += sprintf(pzOut, zLineNum, "linenum", line);
+ 
+     /*
+      *  IF the preamble had a problem, it is because it could not
+@@ -442,6 +585,7 @@ buildPreamble(char ** ppzDef, char ** ppzOut, char const * fname, int line)
+             *pzOut++ = *pz++;
+     }
+ 
++#if 0
+     /*
+      *  IF we are indexing the entries,
+      *  THEN build the string by which we are indexing
+@@ -451,6 +595,7 @@ buildPreamble(char ** ppzDef, char ** ppzOut, char const * fname, int line)
+         sprintf(def_str, "  %s'", name_bf);
+         pzOut = assignIndex(pzOut, def_bf);
+     }
++#endif
+ 
+     /*
+      *  Now insert the name with a consistent name string prefix
+@@ -574,7 +719,7 @@ doPreamble(FILE * outFp)
+     /*
+      *  Emit the "autogen definitions xxx;" line
+      */
+-    fprintf(outFp, zAgDef, OPT_ARG(TEMPLATE));
++    fprintf(outFp, zAgDef, opt_template);
+ 
+     if (HAVE_OPT(FILELIST)) {
+         static char const zFmt[] = "%-12s = '%s';\n";
+@@ -620,9 +765,9 @@ doPreamble(FILE * outFp)
+      *  IF there are global assignments, then emit them
+      *  (these do not get sorted, so we write directly now.)
+      */
+-    if (HAVE_OPT(ASSIGN)) {
+-        int    ct  = STACKCT_OPT(ASSIGN);
+-        char const ** ppz = STACKLST_OPT(ASSIGN);
++    if (opts_assign != NULL) {
++        int    ct  = optcount_assign;
++        char const ** ppz = opts_assign;
+         do  {
+             fprintf(outFp, "%s;\n", *ppz++);
+         } while (--ct > 0);
+@@ -630,7 +775,6 @@ doPreamble(FILE * outFp)
+     }
+ }
+ 
+-
+ /*
+  *  loadFile
+  */
+@@ -887,8 +1031,8 @@ set_first_idx(void)
+ static FILE *
+ open_ag_file(char ** pzBase)
+ {
+-    switch (WHICH_IDX_AUTOGEN) {
+-    case INDEX_OPT_OUTPUT:
++    switch ((opt_output != NULL) ? 1 : 2) {
++    case 1:
+     {
+         static char const zFileFmt[] = " *      %s\n";
+         FILE * fp;
+@@ -896,16 +1040,16 @@ open_ag_file(char ** pzBase)
+         if (*pzBase != NULL)
+             free(*pzBase);
+ 
+-        if (strcmp(OPT_ARG(OUTPUT), "-") == 0)
++        if (strcmp(opt_output, "-") == 0)
+             return stdout;
+ 
+-        unlink(OPT_ARG(OUTPUT));
+-        fp = fopen(OPT_ARG(OUTPUT), "w" FOPEN_BINARY_FLAG);
+-        fprintf(fp, zDne, OPT_ARG(OUTPUT));
++        unlink(opt_output);
++        fp = fopen(opt_output, "w" FOPEN_BINARY_FLAG);
++        fprintf(fp, zDne, opt_output);
+ 
+-        if (HAVE_OPT(INPUT)) {
+-            int    ct  = STACKCT_OPT(INPUT);
+-            char const ** ppz = STACKLST_OPT(INPUT);
++        if (optcount_input != 0) {
++            int    ct  = optcount_input;
++            char * const * ppz = opt_input;
+             do  {
+                 fprintf(fp, zFileFmt, *ppz++);
+             } while (--ct > 0);
+@@ -915,17 +1059,18 @@ open_ag_file(char ** pzBase)
+         return fp;
+     }
+ 
+-    case INDEX_OPT_AUTOGEN:
+-        if (! ENABLED_OPT(AUTOGEN)) {
++    case 2:
++        if (true) {
+             if (*pzBase != NULL)
+                 free(*pzBase);
+ 
+             return stdout;
+         }
+-
++#if 0
+         if (  ( OPT_ARG(AUTOGEN) != NULL)
+               && (*OPT_ARG(AUTOGEN) != NUL ))
+             pzAutogen = OPT_ARG(AUTOGEN);
++#endif
+ 
+         break;
+     }
+@@ -1057,8 +1202,8 @@ startAutogen(void)
+          *  IF we have a definition name pattern,
+          *  THEN copy the leading part that consists of name-like characters.
+          */
+-        if (HAVE_OPT(DEFS_TO_GET)) {
+-            char const * pzS = OPT_ARG(DEFS_TO_GET);
++        if (opt_defs_to_get != NULL) {
++            char const * pzS = opt_defs_to_get;
+             pzBase = malloc(strlen(pzS) + 3);
+             strcpy(pzBase, "-b");
+ 
+@@ -1096,8 +1241,8 @@ startAutogen(void)
+      *  If not, then whatever we decided our base name was will also
+      *  be our template name.
+      */
+-    if (! HAVE_OPT(TEMPLATE))
+-        SET_OPT_TEMPLATE(strdup(pzBase+2));
++    if (opt_template == NULL)
++        opt_template = strdup(pzBase+2);
+ 
+     /*
+      *  Now, what kind of output have we?
+@@ -1107,7 +1252,7 @@ startAutogen(void)
+      *  If the option was not supplied, we default to
+      *  whatever we set the "pzAutogen" pointer to above.
+      */
+-    if (HAVE_OPT(AUTOGEN)) {
++    if (opt_output != NULL) {
+         agFp = open_ag_file(&pzBase);
+         if (agFp != NULL)
+             return agFp;
+diff --git a/getdefs/getdefs.h b/getdefs/getdefs.h
+index 2c184ffe..fd10ef62 100644
+--- a/getdefs/getdefs.h
++++ b/getdefs/getdefs.h
+@@ -34,9 +34,6 @@
+ #include <utime.h>
+ #include <stdarg.h>
+ 
+-#include REGEX_HEADER
+-#include "ag-char-map.h"
+-#include "opts.h"
+ 
+ #define EXPORT
+ #define MAXNAMELEN     256

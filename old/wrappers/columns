@@ -1,0 +1,5 @@
+#!/bin/sh
+echo "$0 $*" >>/opt/autogen-log
+echo "\tCWD: $(pwd)" >>/opt/autogen-log
+for ARG in "$@"; do echo "\tARG: $ARG" >>/opt/autogen-log; done
+exec /opt/autogen/bin/columns "$@"

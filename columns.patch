@@ -1,0 +1,307 @@
+--- a/columns/columns.c
++++ b/columns/columns.c
+@@ -1,3 +1,45 @@
++#define _GNU_SOURCE
++#include <stdlib.h>
++#include <string.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <stdarg.h>
++#include <unistd.h>
++#include <getopt.h>
++#include <ctype.h>
++#include <errno.h>
++#include <stdbool.h>
++#include <stdint.h>
++
++#define MOD_LOCAL static
++#define COLUMNS_EXIT_FAILURE 1
++#define HAVE_OPT(foo) 0
++#define OPT_ARG(foo) NULL
++#define VOIDP(_a)  ((void *)(uintptr_t)(_a))
++
++int OPT_VALUE_WIDTH = 79, OPT_VALUE_TAB_WIDTH = 8, OPT_VALUE_SPREAD = 0;
++int OPT_VALUE_COL_WIDTH = 0, OPT_VALUE_COLUMNS = 0;
++bool opt_fill = false;
++char* opt_line_separation = NULL;
++char* opt_separation = NULL;
++char* opt_format = NULL;
++char* opt_ending = NULL;
++size_t line_separation_len = 0;
++
++void vdie(int exit_code, char const * fmt, va_list ap)
++{
++    fputs("fatal error:\n", stderr);
++    vfprintf(stderr, fmt, ap);
++    fflush(stderr);
++    exit(exit_code);
++}
++
++void die(int exit_code, char const * fmt, ...)
++{
++    va_list ap;
++    va_start(ap, fmt);
++    vdie(exit_code, fmt, ap);
++}
+ 
+ /**
+  *  @file columns.c
+@@ -75,7 +117,66 @@ compProc(const void * p1, const void * p2);
+ int
+ main(int argc, char ** argv)
+ {
+-    (void)optionProcess( &columnsOptions, argc, argv );
++    // only those are needed for bootstrapping:
++    static const struct option long_options[] =
++    {
++        { "indent", required_argument, 0, 'I' },
++        { "col-width", required_argument, 0, 'w' },
++        { "width", required_argument, 0, 'W' },
++        { "fill", no_argument, 0, 1000 },
++        { "first-indent", required_argument, 0, 1001},
++        { "format", required_argument, 0, 'f' },
++        { "separation", required_argument, 0, 'S' },
++        { "spread", required_argument, 0, 's' },
++        { "ending", required_argument, 0, 'e' },
++        { "line-separation", required_argument, 0, 'l' },
++        0
++    };
++
++    while (1)
++    {
++        int result = getopt_long(argc, argv, "I:w:W:f:S:s:e:l:", long_options, NULL);
++        if (result == -1) break;
++        switch (result)
++        {
++            case 'I':
++                indentSize = pad_indentation( optarg, &pzLinePfx);
++                OPT_VALUE_WIDTH -= (long)indentSize;
++                pzFirstPfx = pzLinePfx;
++                break;
++            case 'f':
++                opt_format = optarg;
++                break;
++            case 'S':
++                opt_separation = optarg;
++                break;
++            case 's':
++                OPT_VALUE_SPREAD = atoi(optarg);
++                break;
++            case 'w':
++                OPT_VALUE_COL_WIDTH = atoi(optarg);
++                break;
++            case 'W':
++                OPT_VALUE_WIDTH = atoi(optarg);
++                break;
++            case 1000:
++                opt_fill = true;
++                break;
++            case 1001:
++                pzFirstPfx = construct_first_pfx(optarg);
++                break;
++            case 'e':
++                opt_ending = optarg;
++                break;
++            case 'l':
++                opt_line_separation = optarg;
++                line_separation_len = (long int)strlen(opt_line_separation);
++                OPT_VALUE_WIDTH -= line_separation_len;
++                break;
++            default:
++                die(COLUMNS_EXIT_FAILURE, "Unsupported arg %c", result);
++        }
++    }
+ 
+     if (HAVE_OPT( INDENT )) {
+         indentSize = pad_indentation( OPT_ARG(INDENT), &pzLinePfx);
+@@ -89,7 +190,7 @@ main(int argc, char ** argv)
+     if (HAVE_OPT( LINE_SEPARATION ))
+         OPT_VALUE_WIDTH -= (long int)strlen( OPT_ARG( LINE_SEPARATION));
+ 
+-    if (HAVE_OPT( COL_WIDTH ))
++    if (OPT_VALUE_COL_WIDTH != 0)
+         columnSz = (size_t)OPT_VALUE_COL_WIDTH;
+ 
+     if (HAVE_OPT( COLUMNS ))
+@@ -105,7 +206,7 @@ main(int argc, char ** argv)
+ 
+     if (HAVE_OPT( BY_COLUMNS ))
+         writeColumns();
+-    else if (HAVE_OPT(FILL))
++    else if (opt_fill)
+         writeFill();
+     else
+         writeRows();
+@@ -138,8 +239,7 @@ construct_first_pfx(char const * f_indent)
+      *  need to append a newline and any indentation.
+      */
+     if (firstSize > indentSize) {
+-        size_t sep_len = HAVE_OPT(LINE_SEPARATION)
+-            ? strlen( OPT_ARG(LINE_SEPARATION)) : 0;
++        size_t sep_len = line_separation_len;
+         len = firstSize + sep_len + indentSize + 3;
+         sprintf(pfx_buf, pad_fmt, (int)firstSize);
+     } else {
+@@ -154,9 +254,9 @@ construct_first_pfx(char const * f_indent)
+     if (firstSize > indentSize) {
+         char * p = res + firstSize;
+ 
+-        if (HAVE_OPT( LINE_SEPARATION )) {
+-            len = strlen(OPT_ARG(LINE_SEPARATION));
+-            memcpy(p, OPT_ARG(LINE_SEPARATION), len);
++        if (opt_line_separation != NULL) {
++            len = line_separation_len;
++            memcpy(p, opt_line_separation, len);
+             p  += len;
+         }
+ 
+@@ -238,8 +338,7 @@ pad_indentation(char const * pzIndentArg, char const ** pfx)
+ MOD_LOCAL void
+ readLines(void)
+ {
+-    int sepLen = HAVE_OPT(SEPARATION)
+-        ? (int)strlen(OPT_ARG(SEPARATION)) : 0;
++    int sepLen = opt_separation != NULL ? (int)strlen(opt_separation) : 0;
+ 
+     /*
+      *  Read the input text, stripping trailing white space
+@@ -259,7 +358,7 @@ readLines(void)
+         pzText += len;
+         while (isspace(pzText[-1])) {
+             if (--pzText == zLine) {
+-                if (HAVE_OPT(FILL))
++                if (opt_fill)
+                     break;
+                 goto next_line;
+             }
+@@ -273,10 +372,10 @@ readLines(void)
+          *  THEN the length is the result of the sprintf
+          *  Else, compute the length.
+          */
+-        if (HAVE_OPT(FORMAT)) {
++        if (opt_format != NULL) {
+             pzText = zFmtLine;
+             len = (size_t)snprintf(
+-                zFmtLine, sizeof(zFmtLine), OPT_ARG(FORMAT), zLine);
++                zFmtLine, sizeof(zFmtLine), opt_format, zLine);
+         } else {
+             pzText = zLine;
+         }
+@@ -303,7 +402,7 @@ readLines(void)
+          *  the entries may get reordered.
+          */
+         if (sepLen > 0)
+-            strcat(pzL, OPT_ARG(SEPARATION));
++            strcat(pzL, opt_separation);
+ 
+         if ((int)len > maxEntryWidth)
+             maxEntryWidth = (int)len;
+@@ -318,7 +417,7 @@ readLines(void)
+     /*
+      *  Set the line width to the amount of space we have to play with.
+      */
+-    if ((OPT_VALUE_WIDTH < maxEntryWidth) && (! HAVE_OPT(FILL)))
++    if ((OPT_VALUE_WIDTH < maxEntryWidth) && (! opt_fill))
+         OPT_VALUE_WIDTH = maxEntryWidth;
+ 
+     /*
+@@ -386,7 +485,7 @@ readLines(void)
+      *  Ensure that any "spread" we added to the column size
+      *  does not exceed the parameterized limit.
+      */
+-    if (   HAVE_OPT( SPREAD )
++    if (   OPT_VALUE_SPREAD != 0
+            && ((maxEntryWidth + OPT_VALUE_SPREAD - 1) < (int)columnSz))
+         columnSz = (size_t)(maxEntryWidth + OPT_VALUE_SPREAD - 1);
+ }
+@@ -507,15 +606,15 @@ writeColumns(void)
+              *  IF we have a separator,
+              *  THEN remove it from the last entry.
+              */
+-            if (HAVE_OPT( SEPARATION )) {
++            if (opt_separation != NULL) {
+                 char * pz = pzE + strlen( pzE )
+-                          - strlen( OPT_ARG(SEPARATION));
++                          - strlen( opt_separation );
+                 *pz = NUL;
+             }
+ 
+             fputs(pzE, stdout);
+-            if (HAVE_OPT(ENDING))
+-                fputs(OPT_ARG(ENDING), stdout);
++            if (opt_ending != NULL)
++                fputs(opt_ending, stdout);
+ 
+             putc( '\n', stdout );
+             break;
+@@ -527,8 +626,8 @@ writeColumns(void)
+          *  line), then emit those characters, too.
+          */
+         fputs( pzE, stdout );
+-        if (HAVE_OPT( LINE_SEPARATION ))
+-            fputs( OPT_ARG( LINE_SEPARATION ), stdout );
++        if (opt_line_separation != NULL)
++            fputs( opt_line_separation, stdout );
+ 
+         putc( '\n', stdout );
+         free( VOIDP(pzE) );
+@@ -541,7 +640,7 @@ MOD_LOCAL void
+ trim_last_separation(void)
+ {
+     char * pz = papzLines[ usedCt-1 ];
+-    pz += strlen(pz) - strlen( OPT_ARG(SEPARATION));
++    pz += strlen(pz) - strlen( opt_separation );
+     *pz = NUL;
+ }
+ 
+@@ -554,7 +653,7 @@ writeRows(void)
+     colCt = (int)columnCt;
+     snprintf(zFmt, sizeof(zFmt), "%%-%ds", (int)columnSz);
+ 
+-    if (HAVE_OPT( SEPARATION ))
++    if (opt_separation != NULL)
+         trim_last_separation();
+ 
+     if (pzFirstPfx != NULL) {
+@@ -579,8 +678,8 @@ writeRows(void)
+              */
+             if (--left <= 0) {
+                 fputs(pzL, stdout);
+-                if (HAVE_OPT(ENDING))
+-                    fputs(OPT_ARG(ENDING), stdout);
++                if (opt_ending != NULL)
++                    fputs(opt_ending, stdout);
+ 
+                 putc('\n', stdout);
+                 free(VOIDP(pzL));
+@@ -603,8 +702,8 @@ writeRows(void)
+                  *  IF we have a line separation string, emit that too.
+                  */
+                 fputs( pzL, stdout );
+-                if (HAVE_OPT( LINE_SEPARATION ))
+-                    fputs( OPT_ARG( LINE_SEPARATION ), stdout );
++                if (opt_line_separation != NULL)
++                    fputs( opt_line_separation, stdout );
+ 
+                 putc( '\n', stdout );
+ 
+@@ -662,7 +761,7 @@ writeFill(void)
+     size_t  left  = usedCt;
+     int     colNo = 0;
+ 
+-    if (HAVE_OPT( SEPARATION ))
++    if (opt_separation != NULL)
+         trim_last_separation();
+ 
+     if (pzFirstPfx != NULL)
+@@ -714,8 +813,8 @@ writeFill(void)
+         free(*(ppzLL++));
+     }
+ 
+-    if (HAVE_OPT(ENDING) && (left == 0))
+-        fputs(OPT_ARG(ENDING), stdout);
++    if (opt_ending != NULL && (left == 0))
++        fputs(opt_ending, stdout);
+ 
+     putc('\n', stdout);
+ }

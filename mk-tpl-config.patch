@@ -1,0 +1,10 @@
+--- 1/autoopts/mk-tpl-config.sh
++++ 2/autoopts/mk-tpl-config.sh
+@@ -76,6 +76,7 @@
+ 	    /^#/p
+ 	}
+ 	/does not conform to ANSI C/q' ${top_builddir}/config.h`
++    txt=""
+ 
+     {
+         sed '/define  *top-build-dir/d;/^;;;/d' tpl-config.tlib

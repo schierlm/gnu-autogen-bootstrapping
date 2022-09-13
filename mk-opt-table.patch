@@ -1,0 +1,29 @@
+--- 1/add-on/char-mapper/mk-opt-table.sh
++++ 2/add-on/char-mapper/mk-opt-table.sh
+@@ -39,7 +39,7 @@ init() {
+             sort)
+ 
+     declare -g new_source=false
+-    agexe=$(command -v autogen)XXX
++    agexe=$(command -v autogen)
+     test -x ${agexe} || {
+         tar -xf cm.tar
+         touch $(tar -tf cm.tar)
+@@ -71,7 +71,7 @@ mk_enum() {
+         sed $'1,/^## *BEGIN *CM-OPT/d;/^## *END *CM-OPT/,$d;s/^\t//' ${program}
+         echo $hdl_list';' | sed 's/ /, /g'
+     } > ${def}
+-    ${agexe} -L ${progdir}../../autoopts/tpl ${def} || die "autogen failure"
++    ${agexe} -L ${progdir}/../../autoopts/tpl ${def} || die "autogen failure"
+     rm -f ${def}
+ }
+ 
+@@ -106,7 +106,7 @@ mk_text_def() {
+     #
+     declare tmp_text=$(awk '/^#include/{print $2}' map-text.def)
+     assemble_usage > $tmp_text
+-    ${agexe} map-text.def
++    ${agexe} -L ${progdir}/../../autoopts/tpl map-text.def
+     rm -f $tmp_text
+ }
+ 

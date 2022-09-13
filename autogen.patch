@@ -1,0 +1,910 @@
+--- a/agen5/agDep.c
++++ b/agen5/agDep.c
+@@ -195,9 +195,9 @@ start_dep_file(void)
+         int    fd;
+ 
+         if (dep_file == NULL) {
+-            dep_name_len = strlen(OPT_ARG(BASE_NAME));
++            dep_name_len = strlen(opt_base_name);
+             tfile_name = AGALOC(dep_name_len + TEMP_SUFFIX_LEN + 1, "dfileb");
+-            memcpy(tfile_name, OPT_ARG(BASE_NAME), dep_name_len);
++            memcpy(tfile_name, opt_base_name, dep_name_len);
+             memcpy(tfile_name + dep_name_len, TEMP_SUFFIX,
+                    TEMP_SUFFIX_LEN + 1);
+ 
+@@ -233,9 +233,11 @@ start_dep_file(void)
+     if (dep_fp == NULL)
+         AG_CANT(START_DEP_FOPEN_MSG, dep_file);
+ 
+-    fprintf(dep_fp, START_DEP_FILE_FMT, autogenOptions.pzProgPath);
++    fprintf(dep_fp, START_DEP_FILE_FMT, opt_PROGPATH);
++    fprintf(dep_fp, START_DEP_ARG_FMT, "<Arg>");
+ 
+     {
++#if 0
+         int     ac = (int)autogenOptions.origArgCt - 1;
+         char ** av = autogenOptions.origArgVect + 1;
+ 
+@@ -245,11 +247,12 @@ start_dep_file(void)
+             if (--ac == 0) break;
+             fputs(DEP_FILE_SPLICE_STR, dep_fp);
+         }
++#endif
+         putc('\n', dep_fp);
+     }
+ 
+     {
+-        char const * pnm = autogenOptions.pzPROGNAME;
++        char const * pnm = "autogen";
+         char const * bnm = strchr(dep_target, '/');
+         char * pz;
+ 
+--- a/agen5/agInit.c
++++ b/agen5/agInit.c
+@@ -158,7 +158,7 @@ dep_usage(char const * fmt, ...)
+         va_end(ap);
+     }
+ 
+-    usage_message(USAGE_INVAL_DEP_OPT_FMT, msg);
++    die(1, USAGE_INVAL_DEP_OPT_FMT, msg);
+     /* NOTREACHED */
+ }
+ 
+@@ -171,11 +171,8 @@ dep_usage(char const * fmt, ...)
+  * @param pOptDesc the option descriptor for this option.
+  */
+ static void
+-config_dep(tOptions * opts, tOptDesc * od)
++config_dep(char const * opt_arg)
+ {
+-    char const * opt_arg = od->optArg.argString;
+-    (void)opts;
+-
+     /*
+      *  The option argument is optional.  Make sure we have one.
+      */
+@@ -302,6 +299,7 @@ prep_env(void)
+         ld_lib_path = p;
+     }
+ 
++#if 0
+     /*
+      *  Set the last resort search directories first (lowest priority)
+      *  The lowest of the low is the config time install data dir.
+@@ -311,6 +309,7 @@ prep_env(void)
+     SET_OPT_TEMPL_DIRS(DFT_TPL_DIR_DATA);
+     SET_OPT_TEMPL_DIRS(DFT_TPL_DIR_RELATIVE);
+     SET_OPT_TEMPL_DIRS(LIBDATADIR);
++#endif
+ 
+     {
+         char z[ SCRIBBLE_SIZE+8 ] = "__autogen__";
+--- a/agen5/agShell.c
++++ b/agen5/agShell.c
+@@ -285,10 +285,10 @@ send_server_init_cmds(void)
+     {
+         char * pzc = AGALOC(SHELL_INIT_STR_LEN
+                             + 11 // log10(1 << 32) + 1
+-                            + strlen(autogenOptions.pzProgPath),
++                            + strlen(opt_PROGPATH),
+                             "server init");
+         sprintf(pzc, SHELL_INIT_STR, (unsigned int)getpid(),
+-                autogenOptions.pzProgPath,
++                opt_PROGPATH,
+                 (dep_fp == NULL) ? "" : dep_file);
+ 
+         if (send_cmd_ok(pzc))
+@@ -532,7 +532,7 @@ load_data(void)
+          *  Set a timeout so we do not wait forever.  Sometimes we don't wait
+          *  at all and we should.  Retry in those cases (but not on EOF).
+          */
+-        alarm((unsigned int)OPT_VALUE_TIMEOUT);
++        alarm((unsigned int)opt_timeout);
+         line_p = fgets(zLine, (int)sizeof(zLine), serv_pair.fp_read);
+         alarm(0);
+ 
+--- a/agen5/agUtils.c
++++ b/agen5/agUtils.c
+@@ -70,30 +70,30 @@ define_base_name(void)
+     char const *  pz;
+     char * pzD;
+ 
+-    if (! ENABLED_OPT(DEFINITIONS)) {
+-        OPT_ARG(BASE_NAME) = DFT_BASE_NAME;
++    if (opt_definitions == NULL) {
++        opt_base_name = DFT_BASE_NAME;
+         return;
+     }
+ 
+-    pz = strrchr(OPT_ARG(DEFINITIONS), '/');
++    pz = strrchr(opt_definitions, '/');
+     /*
+      *  Point to the character after the last '/', or to the full
+      *  definition file name, if there is no '/'.
+      */
+-    pz = (pz == NULL) ? OPT_ARG(DEFINITIONS) : (pz + 1);
++    pz = (pz == NULL) ? opt_definitions : (pz + 1);
+ 
+     /*
+      *  IF input is from stdin, then use "stdin"
+      */
+     if ((pz[0] == '-') && (pz[1] == NUL)) {
+-        OPT_ARG(BASE_NAME) = STDIN_FILE_NAME;
++        opt_base_name = STDIN_FILE_NAME;
+         return;
+     }
+ 
+     /*
+      *  Otherwise, use the basename of the definitions file
+      */
+-    OPT_ARG(BASE_NAME) = \
++    opt_base_name = \
+         pzD = AGALOC(strlen(pz)+1, "derived base");
+ 
+     while ((*pz != NUL) && (*pz != '.'))  *(pzD++) = *(pz++);
+@@ -107,11 +107,10 @@ define_base_name(void)
+ static void
+ put_defines_into_env(void)
+ {
+-    int     ct  = STACKCT_OPT(DEFINE);
+-    char const **   ppz = STACKLST_OPT(DEFINE);
++    int     ct  = 1;
+ 
+     do  {
+-        char const * pz = *(ppz++);
++        char const * pz = opt_define;
+         /*
+          *  IF there is no associated value,  THEN set it to '1'.
+          *  There are weird problems with empty defines.
+@@ -135,6 +134,7 @@ put_defines_into_env(void)
+     } while (--ct > 0);
+ }
+ 
++#if 0
+ /**
+  *  Open trace output file.
+  *
+@@ -177,6 +177,7 @@ open_trace_file(char ** av, tOptDesc * odsc)
+         fprintf(trace_fp, TRACE_AG_ARG_FMT, *av);
+     fprintf(trace_fp, TRACE_START_GUILE, libguile_ver);
+ }
++#endif
+ 
+ /**
+  * Check the environment for make dependency info.  We look for
+@@ -244,7 +245,7 @@ check_make_dep_env(void)
+     }
+     if (! set_opt) return;
+     if (! have_opt_string) {
+-        SET_OPT_MAKE_DEP("");
++        //SET_OPT_MAKE_DEP("");
+         return;
+     }
+ 
+@@ -262,7 +263,7 @@ check_make_dep_env(void)
+         }
+         *pz = NUL;
+ 
+-        SET_OPT_SAVE_OPTS(fp);
++        //SET_OPT_SAVE_OPTS(fp);
+         mdep = SPN_WHITESPACE_CHARS(mdep);
+         if (*mdep == NUL)
+             return;
+@@ -277,7 +278,7 @@ check_make_dep_env(void)
+             *(pz++) = (char)ch;
+         }
+         *pz = NUL;
+-        SET_OPT_SAVE_OPTS(fp);
++        //SET_OPT_SAVE_OPTS(fp);
+         AGFREE(fp);
+     }
+ }
+@@ -290,63 +291,127 @@ process_ag_opts(int arg_ct, char ** arg_vec)
+      *  command line options
+      */
+     {
+-        int  optCt = optionProcess(&autogenOptions, arg_ct, arg_vec);
++        if (arg_ct == 2 && strcmp(arg_vec[1], "--help") == 0) {
++          printf("Help not available\n");
++          exit(0);
++          return;
++        } else if (arg_ct == 2 && strcmp(arg_vec[1], "--version") == 0) {
++          printf("autogen (GNU AutoGen) " AUTOGEN_VERSION "\n");
++          exit(0);
++          return;
++        }
++
++
++        // only those are needed for bootstrapping:
++        static const struct option long_options[] =
++        {
++            { "make-dep", required_argument, 0, 'M' },
++            { "override-tpl", required_argument, 0, 'T' },
++            { "define", required_argument, 0, 'D' },
++            { "templ-dirs", required_argument, 0, 'L' },
++            { "base-name", required_argument, 0, 'b' },
++            { "timeout", required_argument, 0, 't' },
++            0
++        };
++
++        while (1)
++        {
++            int result = getopt_long(arg_ct, arg_vec, "M:T:D:L:b:t:", long_options, NULL);
++            if (result == -1) break;
++            switch (result)
++            {
++                case 'M':
++                    config_dep(optarg);
++                    break;
++                case 'T':
++                    if (opt_override_tpl != NULL) die(AUTOGEN_EXIT_USAGE_ERROR, "Multiple -T\n");
++                    opt_override_tpl = optarg;
++                    tpl_fname = optarg;
++                    break;
++                case 'D':
++                    if (opt_define != NULL) die(AUTOGEN_EXIT_USAGE_ERROR, "Multiple -D\n");
++                    opt_define = optarg;
++                    break;
++                case 'L':
++                    if (opt_tpl_dirs != NULL) die(AUTOGEN_EXIT_USAGE_ERROR, "Multiple -L\n");
++                    opt_tpl_dirs = optarg;
++                    break;
++                case 'b':
++                    if (opt_base_name != NULL) die(AUTOGEN_EXIT_USAGE_ERROR, "Multiple -b\n");
++                    opt_base_name = optarg;
++                    break;
++                case 't':
++                    opt_timeout = atoi(optarg);
++                    break;
++                default:
++                    die(AUTOGEN_EXIT_USAGE_ERROR, "Unsupported arg %c\n", result);
++            }
++        }
+ 
+         /*
+          *  Make sure we have a source file, even if it is "-" (stdin)
+          */
+-        switch (arg_ct - optCt) {
++        switch (arg_ct - optind) {
+         case 1:
+-            if (! HAVE_OPT(DEFINITIONS)) {
+-                OPT_ARG(DEFINITIONS) = *(arg_vec + optCt);
++            if (opt_definitions == NULL) {
++                opt_definitions = *(arg_vec + optind);
+                 break;
+             }
+             /* FALLTHROUGH */
+ 
+         default:
+-            usage_message(DOOPT_TOO_MANY_DEFS, ag_pname);
++            die(1, DOOPT_TOO_MANY_DEFS, ag_pname);
+             /* NOTREACHED */
+ 
+         case 0:
+-            if (! HAVE_OPT(DEFINITIONS))
+-                OPT_ARG(DEFINITIONS) = DFT_DEF_INPUT_STR;
++            if (opt_definitions == NULL)
++                opt_definitions = DFT_DEF_INPUT_STR;
+             break;
+         }
+     }
+ 
++    {
++        opt_PROGPATH=arg_vec[0];
++        char* pz = pathfind(getenv("PATH"), opt_PROGPATH, "rx");
++        if (pz != NULL)
++            opt_PROGPATH = pz;
++    }
++#if 0
+     if ((OPT_VALUE_TRACE > TRACE_NOTHING) && HAVE_OPT(TRACE_OUT))
+         open_trace_file(arg_vec, &DESC(TRACE_OUT));
++#endif
+ 
+     start_time = time(NULL) - 1;
+ 
++#if 0
+     if (! HAVE_OPT(TIMEOUT))
+         OPT_ARG(TIMEOUT) = (char const *)AG_DEFAULT_TIMEOUT;
++#endif
+ 
+     /*
+      *  IF the definitions file has been disabled,
+      *  THEN a template *must* have been specified.
+      */
+-    if (  (! ENABLED_OPT(DEFINITIONS))
+-       && (! HAVE_OPT(OVERRIDE_TPL)) )
++    if (opt_definitions == NULL && opt_override_tpl == NULL )
+         AG_ABEND(NO_TEMPLATE_ERR_MSG);
+ 
+     /*
+      *  IF we do not have a base-name option, then we compute some value
+      */
+-    if (! HAVE_OPT(BASE_NAME))
++    if (opt_base_name == NULL)
+         define_base_name();
+ 
+     check_make_dep_env();
+ 
+-    if (HAVE_OPT(MAKE_DEP))
++    if (dep_file != NULL || dep_phonies)
+         start_dep_file();
+ 
+-    strequate(OPT_ARG(EQUATE));
++    strequate("_-^");
+ 
+     /*
+      *  IF we have some defines to put in our environment, ...
+      */
+-    if (HAVE_OPT(DEFINE))
++    if (opt_define != NULL)
+         put_defines_into_env();
+ }
+ 
+@@ -364,12 +429,11 @@ get_define_str(char const * de_name, bool check_env)
+ {
+     char const **   ppz;
+     int     ct;
+-    if (HAVE_OPT(DEFINE)) {
+-        ct  = STACKCT_OPT( DEFINE);
+-        ppz = STACKLST_OPT(DEFINE);
++    if (opt_define != NULL) {
++        ct  = 1;
+ 
+         while (ct-- > 0) {
+-            char const * pz   = *(ppz++);
++            char const * pz   = opt_define;
+             char * pzEq = strchr(pz, '=');
+             int    res;
+ 
+--- a/agen5/autogen.c
++++ b/agen5/autogen.c
+@@ -124,7 +124,7 @@ main(int argc, char ** argv)
+ 
+     // setlocale(LC_ALL, "");
+     setup_signals(ignore_signal, SIG_DFL, catch_sig_and_bail);
+-    optionSaveState(&autogenOptions);
++    //optionSaveState(&autogenOptions);
+     trace_fp = stderr;
+     prep_env();
+ 
+@@ -618,7 +618,6 @@ ao_strdup(char const * str)
+ #ifdef __GNUC__
+     void ignore_vars(void);
+     void ignore_vars(void) {
+-        (void)option_load_mode, (void)program_pkgdatadir;
+     }
+ #endif
+ /**
+--- a/agen5/autogen.h
++++ b/agen5/autogen.h
+@@ -37,7 +37,7 @@
+ #ifndef AUTOGEN_BUILD
+ #define AUTOGEN_BUILD 1
+ #include <stdnoreturn.h>
+-#include "compat/unlocked-io.h"
++//#include "compat/unlocked-io.h"
+ 
+ #include REGEX_HEADER
+ #if !defined(__GNUC__)
+@@ -65,14 +65,17 @@
+ 
+ #define DEFINE_FSM
+ 
++#define SNV_LONG_DOUBLE long double
++#define SNV_INLINE static inline
++#define MOD_LOCAL static
++
+ #include "ag-text.h"
+-#include "opts.h"
+ #include "expr.h"
+-#include "autoopts/autoopts.h"
++//#include "autoopts/autoopts.h"
+ #include "directive.h"
+ #include "snprintfv/printf.h"
+ #include "scribble.h"
+-#include "pseudo-fsm.h"
++//#include "pseudo-fsm.h"
+ 
+ #define  LOG10_2to32  10  /* rounded up */
+ 
+@@ -113,8 +116,7 @@ typedef struct {
+ #define NL          '\n'
+ #define TAB         '\t'
+ 
+-#include "cgi-fsm.h"
+-#include "defParse-fsm.h"
++#include "agFSM.c"
+ 
+ typedef union {
+     unsigned char * pzStr;
+@@ -383,7 +385,7 @@ struct ivk_info {
+  *
+  *  General Processing Globals
+  */
+-#define ag_pname    autogenOptions.pzProgName
++#define ag_pname    "autogen"
+ MODE proc_state_t    processing_state VALUE( PROC_STATE_INIT );
+ MODE unsigned int   include_depth    VALUE( 0 );
+ MODE bool           defining_macro   VALUE( false );
+@@ -586,8 +588,7 @@ MODE v2c_t p2p VALUE( { NULL } );
+ /*
+  *  Code variations based on the version of Guile:
+  */
+-#include "guile-iface.h"
+-#include "proto.h"
++#include "agProto.h"
+ 
+ /**
+  * Evaluate a scheme expression, setting the file and line number from
+--- a/agen5/defDirect.c
++++ b/agen5/defDirect.c
+@@ -491,6 +491,8 @@ doDir_assert(directive_enum_t id, char const * dir, char * scan_next)
+ char *
+ doDir_define(directive_enum_t id, char const * dir, char * scan_next)
+ {
++    die(1, "REMOVED doDir_define\n");
++#if 0
+     char * def_name = SPN_WHITESPACE_CHARS(dir);
+     (void)id;
+ 
+@@ -552,6 +554,7 @@ doDir_define(directive_enum_t id, char const * dir, char * scan_next)
+ 
+     SET_OPT_DEFINE(def_name);
+     return scan_next;
++#endif
+ }
+ 
+ /**
+@@ -808,9 +811,12 @@ doDir_macdef(directive_enum_t id, char const * arg, char * scan_next)
+ char *
+ doDir_option(directive_enum_t id, char const * dir, char * scan_next)
+ {
++    die(1, "REMOVED doDir_option\n");
++#if 0
+     dir = SPN_WHITESPACE_CHARS(dir);
+     optionLoadLine(&autogenOptions, dir);
+     (void)id;
++#endif
+     return scan_next;
+ }
+ 
+@@ -910,6 +916,7 @@ doDir_shell(directive_enum_t id, char const * arg, char * scan_next)
+     return pCtx->scx_scan;
+ }
+ 
++
+ /**
+  *  Will remove any entries from the define list
+  *  that match the undef name pattern.
+@@ -917,10 +924,13 @@ doDir_shell(directive_enum_t id, char const * arg, char * scan_next)
+ char *
+ doDir_undef(directive_enum_t id, char const * dir, char * scan_next)
+ {
++    die(1, "REMOVED doDir_undef\n");
++#if 0
+     dir = SPN_WHITESPACE_CHARS(dir);
+     SET_OPT_UNDEFINE(dir);
+     (void)id;
+     return scan_next;
++#endif
+ }
+ 
+ /**
+--- a/agen5/defLex.c
++++ b/agen5/defLex.c
+@@ -418,11 +418,11 @@ yyerror(char * s)
+         if (strlen(token_str) > 64 )
+             token_str[64] = NUL;
+ 
+-        pz = aprf(YYLEX_TOKEN_STR, DP_EVT_NAME(token_code), token_str);
++        pz = aprf(YYLEX_TOKEN_STR, "<Event>", token_str);
+         break;
+ 
+     default:
+-        pz = aprf(YYLEX_DF_STR, DP_EVT_NAME(token_code));
++        pz = aprf(YYLEX_DF_STR, "<Event>");
+     }
+     AG_ABEND(aprf(YYLEX_ERR_FMT, s, cctx->scx_fname, cctx->scx_line,
+                   pz, cctx->scx_scan));
+diff --git a/agen5/defLoad.c b/agen5/defLoad.c
+index 02158577..7945f389 100644
+--- a/agen5/defLoad.c
++++ b/agen5/defLoad.c
+@@ -366,7 +366,7 @@ ready_def_input(char const ** ppzfile, size_t * psz)
+ {
+     struct stat stbf;
+ 
+-    if (! ENABLED_OPT(DEFINITIONS)) {
++    if (opt_definitions == NULL) {
+         base_ctx = (scan_ctx_t *)AGALOC(sizeof(scan_ctx_t), "scan context");
+         memset(VOIDP(base_ctx), 0, sizeof(scan_ctx_t));
+         base_ctx->scx_line  = 1;
+@@ -378,7 +378,7 @@ ready_def_input(char const ** ppzfile, size_t * psz)
+         return INPUT_DONE;
+     }
+ 
+-    *ppzfile = OPT_ARG(DEFINITIONS);
++    *ppzfile = opt_definitions;
+ 
+     if (OPT_VALUE_TRACE >= TRACE_EXPRESSIONS)
+         fprintf(trace_fp, TRACE_DEF_LOAD);
+@@ -390,11 +390,14 @@ ready_def_input(char const ** ppzfile, size_t * psz)
+      *  the stdin input exceeds our initial allocation of 16K.
+      */
+     if (strcmp(*ppzfile, "-") == 0) {
+-        *ppzfile = OPT_ARG(DEFINITIONS) = "stdin";
++        *ppzfile = opt_definitions = "stdin";
+         if (getenv(REQUEST_METHOD) != NULL) {
++            die(1, "CGI SUPPORT REMOVED\n");
++#if 0
+             load_cgi();
+             cctx = base_ctx;
+             dp_run_fsm();
++#endif
+             return INPUT_DONE;
+         }
+ 
+--- a/agen5/defParse.x
++++ b/agen5/defParse.x
+@@ -36,8 +36,7 @@ trans_evt = yylex();
+ static int
+ dp_invalid_transition(te_dp_state st, te_dp_event evt)
+ {
+-    char const * fmt_pz = zDpStrings + DpFsmErr_off;
+-    fprintf(stderr, fmt_pz, st, DP_STATE_NAME(st), evt, DP_EVT_NAME(evt));
++    fprintf(stderr, "defParse FSM Error\n");
+ 
+     return EXIT_FAILURE;
+ }
+@@ -232,7 +231,7 @@ dp_do_tpl_name(te_dp_state initial, te_dp_state maybe_next,
+ 
+         root_def_ctx.dcx_defent = &seed;
+ 
+-        if (! HAVE_OPT(OVERRIDE_TPL))
++        if (opt_override_tpl == NULL)
+              tpl_fname = token_str;
+ 
+         ent_stack_depth = 0;
+--- a/agen5/expExtract.c
++++ b/agen5/expExtract.c
+@@ -124,8 +124,7 @@ load_extract_file(char const * new_fil)
+ 
+     AGDUPSTR(last_fname, new_fil, "extract file");
+ 
+-    if (! HAVE_OPT(WRITABLE))
+-        SET_OPT_WRITABLE;
++    opt_writable = true;
+ 
+     file_text = load_file(last_fname);
+     if (file_text != NULL)
+--- a/agen5/expFormat.c
++++ b/agen5/expFormat.c
+@@ -188,7 +188,7 @@ ag_scm_dne(SCM prefix, SCM first, SCM opt)
+      *  THEN we set it to something other than ``zNil'' and deallocate later.
+      */
+     if (scm_is_string(first))
+-        pzFirst = aprf(ENABLED_OPT(WRITABLE) ? "%s\n" : EXP_FMT_DNE1,
++        pzFirst = aprf(opt_writable ? "%s\n" : EXP_FMT_DNE1,
+                        ag_scm2zchars(first, "pfx-1"), pzPrefix);
+ 
+     if (date_str == NULL) {
+@@ -213,19 +213,19 @@ ag_scm_dne(SCM prefix, SCM first, SCM opt)
+             tpl_name++;
+ 
+         while (pfp->stk_flags & FPF_UNLINK)  pfp = pfp->stk_prev;
+-        if (! ENABLED_OPT(DEFINITIONS))
++        if (opt_definitions == NULL)
+             pz = "<<no definitions>>";
+ 
+         else if (*oops_pfx != NUL)
+             pz = "<<CGI-definitions>>";
+ 
+         else {
+-            pz = OPT_ARG(DEFINITIONS);
++            pz = opt_definitions;
+             if (strcmp(pz, "-") == 0)
+                 pz = "stdin";
+         }
+ 
+-        pz = aprf(ENABLED_OPT(WRITABLE) ? EXP_FMT_DNE2 : EXP_FMT_DNE,
++        pz = aprf(opt_writable ? EXP_FMT_DNE2 : EXP_FMT_DNE,
+                   pzPrefix, pfp->stk_fname, date_str,
+                   pz, tpl_name, pzFirst);
+         if (pz == NULL)
+--- a/agen5/expOutput.c
++++ b/agen5/expOutput.c
+@@ -108,15 +108,16 @@ make_readonly(void)
+ #endif
+     struct stat sbuf;
+ 
++#if 0
+     /*
+      *  If the output is supposed to be writable, then also see if
+      *  it is a temporary condition (set vs. a command line option).
+      */
+-    if (ENABLED_OPT(WRITABLE)) {
+-        if (! HAVE_OPT(WRITABLE))
+-            CLEAR_OPT(WRITABLE);
++    if (opt_writable) {
++        opt_writable = false;
+         return;
+     }
++#endif
+ 
+     /*
+      *  Set our usage mask to all all the access
+--- a/agen5/expState.c
++++ b/agen5/expState.c
+@@ -204,7 +204,7 @@ find_entry_value(SCM op, SCM obj, SCM test)
+ SCM
+ ag_scm_base_name(void)
+ {
+-    return scm_from_latin1_string(C(char *, OPT_ARG(BASE_NAME)));
++    return scm_from_latin1_string(C(char *, opt_base_name));
+ }
+ 
+ /*=gfunc version_compare
+@@ -608,7 +608,8 @@ ag_scm_low_lim(SCM obj)
+ SCM
+ ag_scm_set_option(SCM opt)
+ {
+-    optionLoadLine(&autogenOptions, ag_scm2zchars(opt, "opt + arg"));
++    die(1, "REMOVED doDir_define\n");
++    //optionLoadLine(&autogenOptions, ag_scm2zchars(opt, "opt + arg"));
+     return SCM_UNDEFINED;
+ }
+ 
+--- a/agen5/funcIf.c
++++ b/agen5/funcIf.c
+@@ -480,6 +480,7 @@ mLoad_While(templ_t * pT, macro_t * mac, char const ** p_scan)
+ SCM
+ ag_scm_set_writable(SCM set)
+ {
++#if 0
+     switch (STATE_OPT(WRITABLE)) {
+     case OPTST_DEFINED:
+     case OPTST_PRESET:
+@@ -488,14 +489,17 @@ ag_scm_set_writable(SCM set)
+         break;
+ 
+     default:
++#endif
++    {
+         if (scm_is_bool(set) && (set == SCM_BOOL_F))
+-            CLEAR_OPT(WRITABLE);
++            opt_writable = false;
+         else
+-            SET_OPT_WRITABLE;
++            opt_writable = true;
+     }
+ 
+     return SCM_UNDEFINED;
+ }
++
+ /**
+  * @}
+  *
+--- a/agen5/loadPseudo.c
++++ b/agen5/loadPseudo.c
+@@ -387,11 +387,27 @@ load_pseudo_mac(char const * text, char const * fname)
+ 
+     while (fsm_state != PM_ST_DONE) {
+         te_pm_event fsm_tkn = next_pm_token(&text, fsm_state, fname);
+-        te_pm_state nxt_state;
+-        te_pm_trans trans;
+ 
+-        nxt_state  = pm_trans_table[ fsm_state ][ fsm_tkn ].next_state;
+-        trans      = pm_trans_table[ fsm_state ][ fsm_tkn ].transition;
++        te_pm_state nxt_state = PM_ST_INVALID;
++        te_pm_trans trans = PM_TR_INVALID;
++
++        if (fsm_tkn == PM_EV_ED_MODE && fsm_state != PM_ST_END_MARK) {
++            nxt_state = fsm_state; trans = PM_TR_SKIP_ED_MODE;
++        } else if (fsm_tkn == PM_EV_MARKER && fsm_state == PM_ST_INIT) {
++            nxt_state = PM_ST_ST_MARK; trans = PM_TR_INIT_MARKER;
++        } else if (fsm_tkn == PM_EV_AUTOGEN && fsm_state == PM_ST_ST_MARK) {
++            nxt_state = PM_ST_AGEN; trans = PM_TR_NOOP;
++        } else if (fsm_tkn == PM_EV_TEMPLATE && fsm_state == PM_ST_AGEN) {
++            nxt_state = PM_ST_TEMPL; trans = PM_TR_NOOP;
++        } else if (fsm_tkn == PM_EV_SUFFIX && fsm_state == PM_ST_TEMPL) {
++            nxt_state = PM_ST_TEMPL; trans = PM_TR_TEMPL_SUFFIX;
++        } else if (fsm_tkn == PM_EV_SCHEME && fsm_state == PM_ST_TEMPL) {
++            nxt_state = PM_ST_TEMPL; trans = PM_TR_TEMPL_SCHEME;
++        } else if (fsm_tkn == PM_EV_MARKER && fsm_state == PM_ST_TEMPL) {
++            nxt_state = PM_ST_END_MARK; trans = PM_TR_TEMPL_MARKER;
++        } else if (fsm_tkn == PM_EV_END_PSEUDO && fsm_state == PM_ST_END_MARK) {
++            nxt_state= PM_ST_DONE; trans = PM_TR_NOOP;
++        }
+ 
+         /*
+          *  There are only so many "PM_TR_<state-name>_<token-name>"
+@@ -449,7 +465,7 @@ load_pseudo_mac(char const * text, char const * fname)
+             break;
+ 
+         case PM_TR_INVALID:
+-            pm_invalid_transition(fsm_state, fsm_tkn);
++            fprintf(stderr, "Pseudo FSM Error\n");
+             switch (fsm_state) {
+             case PM_ST_INIT:     BAD_MARKER(PSEUDO_MAC_BAD_NOSTART);
+             case PM_ST_ST_MARK:  BAD_MARKER(PSEUDO_MAC_BAD_NOAG5);
+diff --git a/agen5/tpLoad.c b/agen5/tpLoad.c
+index 4eb5b32b..7de98153 100644
+--- a/agen5/tpLoad.c
++++ b/agen5/tpLoad.c
+@@ -66,8 +66,10 @@ read_okay(char const * fname)
+ static char const *
+ expand_dir(char const ** dir_pp, char * name_buf)
+ {
++    die(1, "REMOVED expand_dir\n");
+     char * res = VOIDP(*dir_pp);
+ 
++#if 0
+     if (res[1] == NUL)
+         AG_ABEND(aprf(LOAD_FILE_SHORT_NAME, res));
+ 
+@@ -83,7 +85,7 @@ expand_dir(char const ** dir_pp, char * name_buf)
+         AGDUPSTR(res, name_buf, "find dir name");
+        *dir_pp = res; /* save computed name for later */
+     }
+-
++#endif
+     return res;
+ }
+ 
+@@ -102,8 +104,7 @@ file_search_dirs(
+      *  Later entries are more recently added and are searched first.
+      *  We start the "dirlist" pointing to the real last entry.
+      */
+-    int  ct = STACKCT_OPT(TEMPL_DIRS);
+-    char const ** dirlist = STACKLST_OPT(TEMPL_DIRS) + ct - 1;
++    int  ct = opt_tpl_dirs == NULL ? 1 : 2;
+     char const *  c_dir   = FIND_FILE_CURDIR;
+ 
+     /*
+@@ -129,12 +130,14 @@ file_search_dirs(
+         } else {
+             unsigned int fmt_len;
+ 
++#if 0
+             /*
+              *  IF one of our template paths starts with '$', then expand it
+              *  and replace it now and forever (the rest of this run, anyway).
+              */
+             if (*c_dir == '$')
+                 c_dir = expand_dir(dirlist+1, res_name);
++#endif
+ 
+             fmt_len = (unsigned)snprintf(
+                 res_name, AG_PATH_MAX - MAX_SUFFIX_LEN,
+@@ -177,7 +180,7 @@ file_search_dirs(
+             c_dir = referring_tpl;
+ 
+         } else {
+-            c_dir = *(dirlist--);
++            c_dir = ct == 0 ? LIBDATADIR : opt_tpl_dirs;
+         }
+     }
+ 
+@@ -213,6 +216,7 @@ find_file(char const * in_name,
+     if (nm_len >= AG_PATH_MAX - MAX_SUFFIX_LEN)
+         return FAILURE;
+ 
++#if 0
+     /*
+      *  Expand leading environment variables.
+      *  We will not mess with embedded ones.
+@@ -232,6 +236,7 @@ find_file(char const * in_name,
+          */
+         nm_len = strlen(in_name);
+     }
++#endif
+ 
+     /*
+      *  Not a complete file name.  If there is not already
+@@ -535,7 +540,7 @@ cleanup(templ_t * tpl)
+     if (dep_fp != NULL)
+         wrap_up_depends();
+ 
+-    optionFree(&autogenOptions);
++    //optionFree(&autogenOptions);
+ 
+     for (;;) {
+         tpl_unload(tpl);
+--- a/agen5/tpProcess.c
++++ b/agen5/tpProcess.c
+@@ -379,6 +379,7 @@ open_output(out_spec_t * spec)
+         return;
+     }
+ 
++#if 0
+     /*
+      *  IF we are to skip the current suffix,
+      *  we will redirect the output to /dev/null and
+@@ -393,12 +394,13 @@ open_output(out_spec_t * spec)
+                 goto null_open;
+         }
+     }
++#endif
+ 
+     /*
+      *  Remove any suffixes in the last file name
+      */
+     {
+-        char const * def_file = OPT_ARG(BASE_NAME);
++        char const * def_file = opt_base_name;
+         char   z[AG_PATH_MAX];
+         const char * pst = strrchr(def_file, '/');
+         char * end;
+--- a/autoopts/putshell.c
++++ b/autoopts/putshell.c
+@@ -159,7 +159,7 @@ optionQuoteString(char const * text, char const * nl)
+              */
+             *(out++) = '"';
+             *(out++) = NUL;
+-#ifndef NDEBUG
++#if 0
+             if ((size_t)(out - res) > out_sz) {
+                 fputs(misguess_len, stderr);
+                 option_exits(EXIT_FAILURE);
+@@ -180,6 +180,7 @@ optionQuoteString(char const * text, char const * nl)
+     }
+ }
+ 
++#if 0
+ /**
+  *  Print out escaped apostorophes.
+  *
+@@ -493,3 +494,4 @@ optionPutShell(tOptions * pOpts)
+  * indent-tabs-mode: nil
+  * End:
+  * end of autoopts/putshell.c */
++#endif
+\ No newline at end of file
+--- a/autoopts/usage.c
++++ b/autoopts/usage.c
+@@ -40,6 +40,8 @@
+ #define GRAPH_CH(_ch) \
+     ((((unsigned)_ch) <= 0x7E) && (((unsigned)_ch) > ' '))
+ 
++#if 0
++
+ /**
+  * Parse the option usage flags string.  Any parsing problems yield
+  * a zero (no flags set) result.  This function is internal to
+@@ -364,6 +366,8 @@ print_usage_details(tOptions * opts, int exit_code)
+                    ? zstderr_name : zstdout_name);
+ }
+ 
++#endif
++
+ static void
+ print_one_paragraph(char const * text, bool plain, FILE * fp)
+ {
+@@ -498,6 +502,8 @@ optionPrintParagraphs(char const * text, bool plain, FILE * fp)
+     AGFREE(text);
+ }
+ 
++#if 0
++
+ /*=export_func  optionUsage
+  * private:
+  *
+@@ -1274,6 +1280,7 @@ setStdOptFmts(tOptions * opts, char const ** ptxt)
+ 
+     return flen;
+ }
++#endif
+ 
+ /** @}
+  *
+--- a/compat/pathfind.c
++++ b/compat/pathfind.c
+@@ -11,7 +11,7 @@ pathfind( char const * path,
+           char const * fname,
+           char const * mode );
+ 
+-#include "compat.h"
++//#include "compat.h"
+ #ifndef HAVE_PATHFIND
+ #if defined(__windows__) && !defined(__CYGWIN__)
+ static char *

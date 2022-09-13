@@ -1,0 +1,33 @@
+name: Bootstrap
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Install prerequisites
+        run: sudo apt-get install guile-3.0-dev gnulib git libxml2-dev
+
+      - name: Run the bootstrap
+        run: ./bootstrap.sh
+
+  build-from-tarball:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Install prerequisites
+        run: sudo apt-get install guile-3.0-dev gnulib libxml2-dev
+
+      - name: Run the bootstrap
+        run: ./bootstrap_tarball.sh
