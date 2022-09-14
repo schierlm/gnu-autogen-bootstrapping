@@ -31,3 +31,16 @@ jobs:
 
       - name: Run the bootstrap
         run: ./bootstrap_tarball.sh
+
+  build-guile-2_2:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Install prerequisites
+        run: sudo apt-get install guile-2.2-dev gnulib git libxml2-dev
+
+      - name: Run the bootstrap
+        run: GUILE_VERSION=2.2 ./bootstrap.sh
