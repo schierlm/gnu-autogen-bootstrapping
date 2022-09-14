@@ -3,6 +3,7 @@
 mkdir -p build/tarball build/stage1/bin build/stage1/lib/autogen build/prefix
 PREFIX="$(pwd)/build/stage1"
 FINALPREFIX="${FINALPREFIX:-$(pwd)/build/prefix}"
+GUILE_VERSION="${GUILE_VERSION:-3.0}"
 
 ## Get the tarball, remove generated files, and patch required files.
 
@@ -125,8 +126,8 @@ $PREFIX/bin/getdefs output=functions.def template=functions.tpl srcfile linenum 
 $PREFIX/bin/getdefs load=expr.cfg
 sed -n '/^doDir_invalid/d;/^doDir_[a-z]*(/{;s@(.*@@;s@^doDir_@@;p;}' defDirect.c | sort >directive_in.def
 perl ../../../build-indirect-templates.pl
-gcc ../../../getGuileVersion.c $(pkg-config guile-3.0 --cflags) -o getGuileVersion
-gcc -std=gnu99 -DGUILE_VERSION=$(./getGuileVersion) -DLIBDATADIR=\"$PREFIX/lib/autogen\" ../../../agBootstrap.c -I . -I .. -I ../../.. $(pkg-config guile-3.0 --cflags) -o $PREFIX/bin/autogen $(pkg-config guile-3.0 --libs)
+gcc ../../../getGuileVersion.c $(pkg-config guile-"${GUILE_VERSION}" --cflags) -o getGuileVersion
+gcc -std=gnu99 -DGUILE_VERSION=$(./getGuileVersion) -DLIBDATADIR=\"$PREFIX/lib/autogen\" ../../../agBootstrap.c -I . -I .. -I ../../.. $(pkg-config guile-"${GUILE_VERSION}" --cflags) -o $PREFIX/bin/autogen $(pkg-config guile-"${GUILE_VERSION}" --libs)
 cd ../../..
 
 echo "=== Bootstrapping tpl-config.tlib ==="
