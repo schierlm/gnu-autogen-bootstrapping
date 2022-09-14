@@ -3,6 +3,7 @@
 mkdir -p build/tarball build/stage1/bin build/stage1/lib/autogen build/prefix
 PREFIX="$(pwd)/build/stage1"
 FINALPREFIX="${FINALPREFIX:-$(pwd)/build/prefix}"
+GUILE_VERSION="${GUILE_VERSION:-3.0}"
 
 ## Get the tarball, remove generated files, and patch required files.
 
@@ -98,7 +99,7 @@ cp -ar build/autogen-5.18.16 build/tarball
 cd build/tarball
 patch -p1 -i ../../columns.patch
 cd columns
-gcc columns.c -o $PREFIX/bin/columns
+gcc columns.c -o "${PREFIX}/bin/columns"
 cd ../../..
 
 echo "=== Bootstrapping getdefs ==="
@@ -108,7 +109,7 @@ cp -ar build/autogen-5.18.16 build/tarball
 cd build/tarball
 patch -p1 -i ../../getdefs.patch
 cd getdefs
-gcc getdefs.c -I ../../.. -o $PREFIX/bin/getdefs
+gcc -std=gnu99 getdefs.c -I ../../.. -o "${PREFIX}/bin/getdefs"
 cd ../../..
 
 echo "=== Bootstrapping autogen ==="
@@ -121,12 +122,12 @@ cd snprintfv
 bash bootstrap.dir
 cd ../agen5
 perl ../../../build-ag-text.pl
-$PREFIX/bin/getdefs output=functions.def template=functions.tpl srcfile linenum defs=macfunc listattr=alias $(grep -l '/\*=macfunc' *.c)
-$PREFIX/bin/getdefs load=expr.cfg
+"${PREFIX}/bin/getdefs" output=functions.def template=functions.tpl srcfile linenum defs=macfunc listattr=alias $(grep -l '/\*=macfunc' *.c)
+"${PREFIX}/bin/getdefs" load=expr.cfg
 sed -n '/^doDir_invalid/d;/^doDir_[a-z]*(/{;s@(.*@@;s@^doDir_@@;p;}' defDirect.c | sort >directive_in.def
 perl ../../../build-indirect-templates.pl
-gcc ../../../getGuileVersion.c $(pkg-config guile-3.0 --cflags) -o getGuileVersion
-gcc -DGUILE_VERSION=$(./getGuileVersion) -DLIBDATADIR=\"$PREFIX/lib/autogen\" ../../../agBootstrap.c -I . -I .. -I ../../.. $(pkg-config guile-3.0 --cflags) -o $PREFIX/bin/autogen $(pkg-config guile-3.0 --libs)
+gcc ../../../getGuileVersion.c $(pkg-config guile-"${GUILE_VERSION}" --cflags) -o getGuileVersion
+gcc -std=gnu99 -DGUILE_VERSION=$(./getGuileVersion) -DLIBDATADIR=\"$PREFIX/lib/autogen\" ../../../agBootstrap.c -I . -I .. -I ../../.. $(pkg-config guile-"${GUILE_VERSION}" --cflags) -o $PREFIX/bin/autogen $(pkg-config guile-"${GUILE_VERSION}" --libs)
 cd ../../..
 
 echo "=== Bootstrapping tpl-config.tlib ==="
@@ -136,13 +137,13 @@ export PATH="$PREFIX/bin:$PATH"
 rm -R build/tarball
 cp -ar build/autogen-5.18.16 build/tarball
 cd build/tarball
-sed 's/@EGREP@/egrep/g;s/@GREP@/grep/g' <autoopts/tpl/tpl-config-tlib.in >$PREFIX/lib/autogen/tpl-config.tlib
-cp autoopts/tpl/*.lic $PREFIX/lib/autogen
+sed 's/@EGREP@/egrep/g;s/@GREP@/grep/g' <autoopts/tpl/tpl-config-tlib.in >"${PREFIX}/lib/autogen/tpl-config.tlib"
+cp autoopts/tpl/*.lic "${PREFIX}/lib/autogen"
 SOURCE_DIR="$(pwd)" ./config/bootstrap
-./configure --prefix=$PREFIX --disable-dependency-tracking
+./configure --prefix="$PREFIX" --disable-dependency-tracking
 cd autoopts
 make tpl-config-stamp
-cp tpl/tpl-config.tlib $PREFIX/lib/autogen/tpl-config.tlib
+cp tpl/tpl-config.tlib "${PREFIX}/lib/autogen/tpl-config.tlib"
 cd ../../..
 
 echo "=== Compiling and testing package ==="
@@ -151,7 +152,7 @@ rm -R build/tarball
 cp -ar build/autogen-5.18.16 build/tarball
 cd build/tarball
 SOURCE_DIR="$(pwd)" ./config/bootstrap
-./configure --prefix=$FINALPREFIX --disable-dependency-tracking
+./configure --prefix="$FINALPREFIX" --disable-dependency-tracking
 touch doc/agdoc.texi # build later
 make CFLAGS=-Wno-error
 make check
