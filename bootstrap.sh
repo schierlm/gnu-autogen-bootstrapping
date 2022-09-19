@@ -74,7 +74,7 @@ perl ../../../build-ag-text.pl
 sed -n '/^doDir_invalid/d;/^doDir_[a-z]*(/{;s@(.*@@;s@^doDir_@@;p;}' defDirect.c | sort >directive_in.def
 perl ../../../build-indirect-templates.pl
 gcc ../../../getGuileVersion.c $(pkg-config guile-"${GUILE_VERSION}" --cflags) -o getGuileVersion
-gcc -std=gnu99 -DGUILE_VERSION=$(./getGuileVersion) -DLIBDATADIR=\"$PREFIX/lib/autogen\" ../../../agBootstrap.c -I . -I .. -I ../../.. $(pkg-config guile-"${GUILE_VERSION}" --cflags) -o $PREFIX/bin/autogen $(pkg-config guile-"${GUILE_VERSION}" --libs)
+gcc -std=gnu99 -DGUILE_VERSION=$(./getGuileVersion) -DLIBDATADIR=\"$PREFIX/lib/autogen\" ../../../agBootstrap.c -I . -I .. -I ../../.. $(pkg-config guile-"${GUILE_VERSION}" --cflags) -o $PREFIX/bin/autogen $(pkg-config guile-"${GUILE_VERSION}" --libs "${STATIC}")
 cd ..
 
 echo "=== Bootstrapping tpl-config.tlib ==="
