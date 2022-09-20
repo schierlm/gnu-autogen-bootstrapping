@@ -48,7 +48,7 @@ git clean -fdx
 git restore --staged --worktree :/
 patch -p1 -i ../../columns.patch
 cd columns
-gcc columns.c -o "${PREFIX}/bin/columns"
+"${CC:-gcc}" ${CFLAGS} columns.c -o "${PREFIX}/bin/columns"
 cd ..
 
 echo "=== Bootstrapping getdefs ==="
@@ -57,7 +57,7 @@ git clean -fdx
 git restore --staged --worktree :/
 patch -p1 -i ../../getdefs.patch
 cd getdefs
-gcc -std=gnu99 getdefs.c -I ../../.. -o "${PREFIX}/bin/getdefs"
+"${CC:-gcc}" ${CFLAGS} -std=gnu99 getdefs.c -I ../../.. -o "${PREFIX}/bin/getdefs"
 cd ..
 
 echo "=== Bootstrapping autogen ==="
@@ -73,8 +73,8 @@ perl ../../../build-ag-text.pl
 "${PREFIX}/bin/getdefs" load=expr.cfg
 sed -n '/^doDir_invalid/d;/^doDir_[a-z]*(/{;s@(.*@@;s@^doDir_@@;p;}' defDirect.c | sort >directive_in.def
 perl ../../../build-indirect-templates.pl
-gcc ../../../getGuileVersion.c $(pkg-config guile-"${GUILE_VERSION}" --cflags) -o getGuileVersion
-gcc -std=gnu99 -DGUILE_VERSION=$(./getGuileVersion) -DLIBDATADIR=\"$PREFIX/lib/autogen\" ../../../agBootstrap.c -I . -I .. -I ../../.. $(pkg-config guile-"${GUILE_VERSION}" --cflags) -o $PREFIX/bin/autogen $(pkg-config guile-"${GUILE_VERSION}" --libs "${STATIC}")
+"${CC:-gcc}" ${CFLAGS} ../../../getGuileVersion.c $(pkg-config guile-"${GUILE_VERSION}" --cflags) -o getGuileVersion
+"${CC:-gcc}" ${CFLAGS} -std=gnu99 -DGUILE_VERSION=$(./getGuileVersion) -DLIBDATADIR=\"$PREFIX/lib/autogen\" ../../../agBootstrap.c -I . -I .. -I ../../.. $(pkg-config guile-"${GUILE_VERSION}" --cflags "${GUILE_STATIC}") -o $PREFIX/bin/autogen $(pkg-config guile-"${GUILE_VERSION}" --libs "${GUILE_STATIC}")
 cd ..
 
 echo "=== Bootstrapping tpl-config.tlib ==="
@@ -86,7 +86,7 @@ git restore --staged --worktree :/
 sed 's/@EGREP@/egrep/g;s/@GREP@/grep/g' <autoopts/tpl/tpl-config-tlib.in >"${PREFIX}/lib/autogen/tpl-config.tlib"
 cp autoopts/tpl/*.lic "${PREFIX}/lib/autogen"
 SOURCE_DIR="$(pwd)" ./config/bootstrap
-./configure --prefix="$PREFIX" --disable-dependency-tracking
+./configure --prefix="$PREFIX" --disable-dependency-tracking ${CONFIGURE_FLAGS}
 cd autoopts
 make tpl-config-stamp
 cp tpl/tpl-config.tlib "${PREFIX}/lib/autogen/tpl-config.tlib"
@@ -97,7 +97,7 @@ echo "=== Compiling and testing package ==="
 git clean -fdx
 git restore --staged --worktree :/
 SOURCE_DIR="$(pwd)" ./config/bootstrap
-./configure --prefix="$FINALPREFIX" --disable-dependency-tracking
+./configure --prefix="$FINALPREFIX" --disable-dependency-tracking ${CONFIGURE_FLAGS}
 touch doc/agdoc.texi # build later
 make CFLAGS=-Wno-error
 make check

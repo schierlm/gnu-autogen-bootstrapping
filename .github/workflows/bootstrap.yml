@@ -44,3 +44,17 @@ jobs:
 
       - name: Run the bootstrap
         run: GUILE_VERSION=2.2 ./bootstrap.sh
+
+  build-statically:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Install prerequisites
+        run: sudo apt-get install guile-3.0-dev libunistring-dev libffi-dev libgmp-dev libcrypt-dev libltdl-dev gnulib git libxml2-dev
+
+      - name: Run the bootstrap
+        # seems that pkg-config for Guile on debian tries to statically link against libgmp.so and libunistring.so :-(
+        run: GUILE_STATIC=--static CFLAGS=-static CONFIGURE_FLAGS="--disable-shared --enable-static" ./bootstrap.sh || true
