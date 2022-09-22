@@ -42,7 +42,7 @@ prepare_tarball() {
 	## remove generated files, and patch required files.
 	if ! [ -f build/autogen-5.18.16/ZZJUNK ]; then
 		echo "=== Preparing tarball ==="
-		tar -C build -xJf build/autogen-5.18.16.tar.xz
+		tar -C build --no-same-owner -xJf build/autogen-5.18.16.tar.xz
 		cd build/autogen-5.18.16
 
 		# copy char-mapper from git
