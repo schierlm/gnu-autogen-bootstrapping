@@ -186,12 +186,12 @@ rebuild_autogen() {
 	touch doc/agdoc.texi # build later
 	make CFLAGS=-Wno-error
 	make check
-	make install
+	make DESTDIR="${DESTDIR}" install
 	cd doc
 	PATH="$FINALPREFIX/bin:$PATH"
 	rm agdoc.texi
 	make
-	make install
+	make DESTDIR="${DESTDIR}" install
 	cd ../../..
 
 	echo "=== BOOTSTRAP COMPLETE ==="
