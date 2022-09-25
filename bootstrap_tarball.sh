@@ -181,6 +181,7 @@ rebuild_autogen() {
 	rm -R build/tarball
 	cp -ar build/autogen-5.18.16 build/tarball
 	cd build/tarball
+	export MAN_PAGE_DATE=1970-01-01
 	SOURCE_DIR="$(pwd)" ./config/bootstrap
 	./configure --prefix="$FINALPREFIX" --disable-dependency-tracking ${CONFIGURE_FLAGS}
 	touch doc/agdoc.texi # build later

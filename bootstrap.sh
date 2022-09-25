@@ -121,6 +121,7 @@ rebuild_autogen() {
 	cd build/src
 	git clean -fdx
 	git restore --staged --worktree :/
+	export MAN_PAGE_DATE=1970-01-01
 	SOURCE_DIR="$(pwd)" ./config/bootstrap
 	./configure --prefix="$FINALPREFIX" --disable-dependency-tracking ${CONFIGURE_FLAGS}
 	touch doc/agdoc.texi # build later
