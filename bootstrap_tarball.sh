@@ -183,7 +183,7 @@ rebuild_autogen() {
 	cd build/tarball
 	export MAN_PAGE_DATE=1970-01-01
 	SOURCE_DIR="$(pwd)" ./config/bootstrap
-	./configure --prefix="$FINALPREFIX" --disable-dependency-tracking ${CONFIGURE_FLAGS}
+	./configure --prefix="$FINALPREFIX" --disable-dependency-tracking --enable-timeout=15 ${CONFIGURE_FLAGS}
 	touch doc/agdoc.texi # build later
 	make CFLAGS=-Wno-error
 	make check
