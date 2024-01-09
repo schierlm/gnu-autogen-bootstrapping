@@ -15,4 +15,5 @@
 
 int main() {
 	printf("%u%02u%03u\n", SCM_MAJOR_VERSION, SCM_MINOR_VERSION, SCM_MICRO_VERSION);
+	return 0;
 }
